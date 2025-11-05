@@ -377,3 +377,21 @@ body {
   background: rgba(178, 34, 34, 0.06);
   color: var(--danger);
 }
+@media (max-width: 600px) {
+  #slotsContainer {
+    /* CORRECTED ID */
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 15px;
+    grid-template-columns: unset;
+    gap: 10px;
+  }
+  .slot {
+    /* CORRECTED CLASS */
+    flex-shrink: 0;
+    width: 100px;
+    max-width: 120px;
+  }
+}

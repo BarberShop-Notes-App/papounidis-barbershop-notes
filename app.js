@@ -279,6 +279,24 @@ function escapeHtml(s) {
       ])
   );
 }
+dayEl.addEventListener("click", (e) => {
+  const clickedISO = e.currentTarget.getAttribute("data-date");
+
+  if (selectedDateISO === clickedISO) {
+    // CASE 1: Same date clicked -> DESELECT and HIDE slots
+    selectedDateISO = null;
+    renderSlots(null); // renderSlots(null) handles hiding the slotsCard
+  } else {
+    // CASE 2: Different date clicked -> SELECT and SHOW slots
+    selectedDateISO = clickedISO;
+    renderSlots(clickedISO);
+  }
+
+  // CRITICAL: We call renderCalendar again to update the "selected" visual state
+  // based on the new value of the global variable `selectedDateISO`.
+  renderCalendar();
+});
+calendarGrid.appendChild(dayEl);
 
 /* Save booking */
 saveBtn.addEventListener("click", () => {
