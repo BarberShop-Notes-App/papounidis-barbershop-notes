@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Papounidis — Appointments</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#0f1112" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="top">
+        <div class="brand">
+          <div>
+            <div id="appTitle" class="title">Papounidis-BarberShop</div>
+            <div class="subtitle" id="subtitle">Barbershop notes</div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="langToggle" class="btn subtle" aria-pressed="false">
+            Ελληνικά
+          </button>
+          <button id="clearBtn" class="btn ghost" title="Clear all bookings">
+            Clear
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="calendar-card card">
+          <div class="cal-header">
+            <button id="prevMonth" class="icon-btn" aria-label="Previous month">
+              ‹
+            </button>
+            <div id="monthLabel" class="month-label"></div>
+            <button id="nextMonth" class="icon-btn" aria-label="Next month">
+              ›
+            </button>
+          </div>
+
+          <div class="weekday-row" role="presentation">
+            <div>Su</div>
+            <div>Mo</div>
+            <div>Tu</div>
+            <div>We</div>
+            <div>Th</div>
+            <div>Fr</div>
+            <div>Sa</div>
+          </div>
+
+          <div
+            id="calendarGrid"
+            class="calendar-grid"
+            role="grid"
+            aria-label="Calendar"
+          ></div>
+        </section>
+
+        <section class="slots-card card">
+          <div class="slots-header">
+            <div id="selectedLabel">Select a date</div>
+            <!-- <div class="legend">
+              <span class="chip free" id="lblFree">Free</span>
+              <span class="chip booked" id="lblBooked">Booked</span>
+            </div> -->
+          </div>
+          <div id="slotsContainer" class="slots-grid" aria-live="polite"></div>
+        </section>
+      </main>
+
+      <footer class="bottom">
+        <small id="installHint">Offline · Add to home screen</small>
+      </footer>
+    </div>
+
+    <!-- Modal -->
+    <div
+      id="modal"
+      class="modal"
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="modal-card">
+        <h3 id="modalTitle">Book appointment</h3>
+
+        <div class="modal-body">
+          <label id="lblClient">Client name</label>
+          <input
+            id="inputName"
+            type="text"
+            maxlength="80"
+            autocomplete="name"
+          />
+
+          <label id="lblPhone">Phone</label>
+          <input id="inputPhone" type="tel" maxlength="30" inputmode="tel" />
+        </div>
+
+        <div class="modal-actions">
+          <button id="deleteBtn" class="btn ghost danger" style="display: none">
+            Delete
+          </button>
+          <div class="spacer"></div>
+          <button id="cancelBtn" class="btn subtle">Cancel</button>
+          <button id="saveBtn" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

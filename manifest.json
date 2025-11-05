@@ -1,0 +1,16 @@
+{
+  "name": "Papounidis-Barbershop",
+  "short_name": "Papounidis-Barbershop",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0b0f11",
+  "theme_color": "#0b0f11",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "photos/background.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
