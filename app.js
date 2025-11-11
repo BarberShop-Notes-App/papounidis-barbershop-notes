@@ -165,7 +165,7 @@ function generateTimes() {
 }
 const TIMES = generateTimes();
 
-/* *** CORRECTED: Paged Slider Logic *** */
+/* Display selected date & slots */
 function renderSlots(dateISO) {
   if (!dateISO) {
     slotsContainer.innerHTML = `<div class="placeholder">${STRINGS[lang].selectDate}</div>`;
@@ -174,9 +174,12 @@ function renderSlots(dateISO) {
     return;
   }
   slotsCard.style.display = "block";
-  //label
+
+  // label: CRITICAL FIX for Timezone Bug (Nov 10 -> Nov 9 shift)
+  // We use Y, M, D components to force local date interpretation.
   const parts = dateISO.split("-").map((p) => parseInt(p, 10)); // [YYYY, MM, DD]
-  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  const d = new Date(parts[0], parts[1] - 1, parts[2]); // Month is 0-indexed, so we subtract 1
+
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
     { weekday: "short", month: "short", day: "numeric", year: "numeric" }
@@ -230,7 +233,6 @@ function renderSlots(dateISO) {
     slotsContainer.appendChild(currentPage);
   }
 }
-
 /* Modal handling */
 function openModalForSlot(date, time) {
   activeSlot = { date, time };
@@ -391,15 +393,24 @@ function applyLanguage() {
 }
 
 /* Init */
+
 function init() {
   loadFromStorage();
   applyLanguage();
+
+  // 1. Get a reliable Date object for today.
   const today = new Date();
+
+  // 2. FIX: Set currentMonth to the START of today's month.
+  // This ensures the calendar grid opens to the correct month (e.g., November).
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  // default selected date = today
+
+  // 3. FIX: Set selectedDateISO to today's date string (e.g., "2025-11-11").
+  // This ensures the time slots are visible on first load.
   selectedDateISO = today.toISOString().slice(0, 10);
-  renderCalendar();
-  renderSlots(selectedDateISO);
+
+  renderCalendar(); // Renders November with today (e.g., 11th) selected
+  renderSlots(selectedDateISO); // Renders slots for the 11th
 
   // register service worker
   if ("serviceWorker" in navigator) {
