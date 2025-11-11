@@ -78,6 +78,13 @@ function loadFromStorage() {
     appointments = {};
   }
 }
+/* ✅ Local date helper (no UTC shift) */
+function toLocalISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 /* Calendar helpers */
 function startOfMonth(d) {
@@ -112,7 +119,7 @@ function renderCalendar() {
   for (let i = 0; i < slots; i++) {
     const d = new Date(firstShown);
     d.setDate(firstShown.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = toLocalISODate(d); // ✅ FIXED
     const dayEl = document.createElement("button");
     dayEl.className = "day";
     if (d.getMonth() !== currentMonth.getMonth())
@@ -398,7 +405,7 @@ function init() {
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
   // FIX 2: Initialize selectedDateISO to today's date string (e.g., "2025-11-11")
-  selectedDateISO = today.toISOString().slice(0, 10);
+  selectedDateISO = toLocalISODate(today); // ✅ FIXED
 
   // These two calls should now reliably render the correct view on load.
   renderCalendar();
