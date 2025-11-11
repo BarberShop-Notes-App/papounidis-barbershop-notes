@@ -122,23 +122,18 @@ function renderCalendar() {
     dayEl.setAttribute("data-date", iso);
     dayEl.innerText = d.getDate();
 
-    // *** CORRECTED DATE TOGGLE LOGIC ***
+    // Corrected Date Toggle Logic
     dayEl.addEventListener("click", (e) => {
       const clickedISO = e.currentTarget.getAttribute("data-date");
 
       if (selectedDateISO === clickedISO) {
-        // CASE 1: Same date clicked -> DESELECT and HIDE slots
         selectedDateISO = null;
-        renderSlots(null); // renderSlots(null) handles hiding the slotsCard
+        renderSlots(null);
       } else {
-        // CASE 2: Different date clicked -> SELECT and SHOW slots
         selectedDateISO = clickedISO;
         renderSlots(clickedISO);
       }
-
-      // CRITICAL: We call renderCalendar again to update the "selected" visual state
-      // based on the new value of the global variable `selectedDateISO`.
-      renderCalendar();
+      renderCalendar(); // Rerender to update the 'selected' visual state
     });
     calendarGrid.appendChild(dayEl);
   }
@@ -178,7 +173,8 @@ function renderSlots(dateISO) {
   // label: CRITICAL FIX for Timezone Bug (Nov 10 -> Nov 9 shift)
   // We use Y, M, D components to force local date interpretation.
   const parts = dateISO.split("-").map((p) => parseInt(p, 10)); // [YYYY, MM, DD]
-  const d = new Date(parts[0], parts[1] - 1, parts[2]); // Month is 0-indexed, so we subtract 1
+  // Date constructor uses (year, monthIndex, day)
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
 
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
@@ -188,8 +184,8 @@ function renderSlots(dateISO) {
   slotsContainer.innerHTML = "";
   const dayAppts = appointments[dateISO] || {};
 
-  // *** NEW PAGINATION LOGIC ***
-  const ITEMS_PER_PAGE = 6; // 2 rows of 3 boxes
+  // *** PAGINATION LOGIC (2 rows of 3 boxes) ***
+  const ITEMS_PER_PAGE = 6;
   let currentPage = null;
 
   TIMES.forEach((time, index) => {
@@ -233,6 +229,7 @@ function renderSlots(dateISO) {
     slotsContainer.appendChild(currentPage);
   }
 }
+
 /* Modal handling */
 function openModalForSlot(date, time) {
   activeSlot = { date, time };
@@ -300,10 +297,8 @@ saveBtn.addEventListener("click", () => {
   renderSlots(activeSlot.date);
   renderCalendar();
 
-  // 💡 CRITICAL FIX: Save activeSlot.time *before* closeModal() runs
   const timeToFlash = activeSlot.time;
 
-  // Close the modal and set activeSlot = null
   closeModal();
 
   // 2. ANIMATION CODE: Now uses the safe, local variable timeToFlash
@@ -392,25 +387,22 @@ function applyLanguage() {
   langToggle.innerText = lang === "en" ? "Ελληνικά" : "English";
 }
 
-/* Init */
-
+/* Init: CORRECTED FOR BLANK/WRONG MONTH ISSUE */
 function init() {
   loadFromStorage();
   applyLanguage();
 
-  // 1. Get a reliable Date object for today.
   const today = new Date();
 
-  // 2. FIX: Set currentMonth to the START of today's month.
-  // This ensures the calendar grid opens to the correct month (e.g., November).
+  // FIX 1: Initialize currentMonth to the START of today's month (e.g., Nov 1st)
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  // 3. FIX: Set selectedDateISO to today's date string (e.g., "2025-11-11").
-  // This ensures the time slots are visible on first load.
+  // FIX 2: Initialize selectedDateISO to today's date string (e.g., "2025-11-11")
   selectedDateISO = today.toISOString().slice(0, 10);
 
-  renderCalendar(); // Renders November with today (e.g., 11th) selected
-  renderSlots(selectedDateISO); // Renders slots for the 11th
+  // These two calls should now reliably render the correct view on load.
+  renderCalendar();
+  renderSlots(selectedDateISO);
 
   // register service worker
   if ("serviceWorker" in navigator) {
