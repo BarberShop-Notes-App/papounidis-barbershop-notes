@@ -1,5 +1,5 @@
 /* Minimal cache-first Service Worker for app shell */
-const CACHE_NAME = "papounidis-shell-v3";
+const CACHE_NAME = "papounidis-shell-v4";
 const ASSETS = [
   "/",
   "/index.html",
