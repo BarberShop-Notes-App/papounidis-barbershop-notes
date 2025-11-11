@@ -122,9 +122,11 @@ body {
   padding-bottom: 10px;
 }
 
-/* *** CORRECTED: Solid background for readability *** */
+/* *** CORRECTED: "Frosted Glass" transparency for readability *** */
 .card {
-  background: #0f1112; /* Solid, dark background */
+  background: rgba(15, 17, 18, 0.75); /* 75% solid dark background */
+  backdrop-filter: blur(10px); /* Optional: Adds a nice blur effect */
+  -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius);
   padding: 12px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
@@ -201,9 +203,9 @@ body {
   gap: 8px;
 }
 
-/* *** CORRECTED: Solid background for readability *** */
+/* *** CORRECTED: Semi-transparent background for slots *** */
 .slot {
-  background: #1a1c1e; /* A slightly lighter solid color */
+  background: rgba(26, 28, 30, 0.85); /* 85% solid dark background */
   padding: 10px;
   border-radius: 10px;
   min-height: 58px;
@@ -300,6 +302,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.04);
   background: transparent;
   color: var(--text);
+  font-size: 16px; /* <-- FIXES iOS ZOOM BUG */
 }
 
 /* modal actions */
@@ -341,7 +344,8 @@ body {
   font-size: 16px;
   font-weight: 500;
   border-radius: 10px;
-  background: var(--card);
+  /* Use the same semi-transparent background as the slot buttons */
+  background: rgba(26, 28, 30, 0.85);
 }
 /* Clean, Theme-Matching Animation: Danger Glow Pulse */
 
@@ -376,26 +380,40 @@ body {
   color: var(--danger);
 }
 
-/* *** CORRECTED: Mobile horizontal "slider" for time slots *** */
+/* *** CORRECTED: Mobile "Paged Slider" for time slots *** */
 @media (max-width: 600px) {
+  /* This is the main slider container */
   #slotsContainer {
     display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 15px;
-    grid-template-columns: unset;
-    gap: 10px;
+    gap: 10px; /* This is the gap BETWEEN pages */
 
-    /* This creates the "slide" snap effect */
+    /* Snap to the PAGES */
     scroll-snap-type: x mandatory;
+
+    /* We remove the grid properties from here */
+    grid-template-columns: unset;
   }
+
+  /* This is the new "Page" element (holds 6 boxes) */
+  .slot-page {
+    flex-shrink: 0;
+    width: 100%; /* Each page is full width */
+    scroll-snap-align: start; /* Snap to this element */
+
+    /* This grid organizes the 6 boxes INSIDE the page */
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px; /* Gap between time boxes */
+  }
+
+  /* The time boxes no longer control snapping */
   .slot {
     flex-shrink: 0;
-    width: 100px;
-    max-width: 120px;
-
-    /* This tells each slot to be a snap point */
-    scroll-snap-align: start;
+    width: auto; /* Width is controlled by the .slot-page grid */
+    max-width: none;
   }
 }

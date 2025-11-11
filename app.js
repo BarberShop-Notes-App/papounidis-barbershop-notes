@@ -165,7 +165,7 @@ function generateTimes() {
 }
 const TIMES = generateTimes();
 
-/* Display selected date & slots */
+/* *** CORRECTED: Paged Slider Logic *** */
 function renderSlots(dateISO) {
   if (!dateISO) {
     slotsContainer.innerHTML = `<div class="placeholder">${STRINGS[lang].selectDate}</div>`;
@@ -174,7 +174,7 @@ function renderSlots(dateISO) {
     return;
   }
   slotsCard.style.display = "block";
-  //lablel
+  //label
   const d = new Date(dateISO + "T00:00:00");
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
@@ -184,11 +184,25 @@ function renderSlots(dateISO) {
   slotsContainer.innerHTML = "";
   const dayAppts = appointments[dateISO] || {};
 
-  TIMES.forEach((time) => {
+  // *** NEW PAGINATION LOGIC ***
+  const ITEMS_PER_PAGE = 6; // 2 rows of 3 boxes
+  let currentPage = null;
+
+  TIMES.forEach((time, index) => {
+    // 1. Create a new page every 6 items
+    if (index % ITEMS_PER_PAGE === 0) {
+      if (currentPage) {
+        slotsContainer.appendChild(currentPage); // Append the finished page
+      }
+      currentPage = document.createElement("div");
+      currentPage.className = "slot-page";
+    }
+
+    // 2. Create the time slot button (same as before)
     const btn = document.createElement("button");
     btn.className = "slot";
     btn.setAttribute("data-time", time);
-    // show Time in locale
+
     const [hh, mm] = time.split(":").map(Number);
     const tDisplay = new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
       lang === "el" ? "el-GR" : "en-US",
@@ -199,14 +213,21 @@ function renderSlots(dateISO) {
       btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(
         dayAppts[time].name
       )}</div>`;
-      btn.disabled = false; // allow opening to view
+      btn.disabled = false;
     } else {
       btn.classList.add("free");
-      btn.innerHTML = `<div class="time">${tDisplay}</div>`; //<div class="client muted">${STRINGS[lang].free}</div>
+      btn.innerHTML = `<div class="time">${tDisplay}</div>`;
     }
     btn.addEventListener("click", () => openModalForSlot(dateISO, time));
-    slotsContainer.appendChild(btn);
+
+    // 3. Append the button to the current page
+    currentPage.appendChild(btn);
   });
+
+  // 4. Append the final page
+  if (currentPage) {
+    slotsContainer.appendChild(currentPage);
+  }
 }
 
 /* Modal handling */
@@ -374,7 +395,7 @@ function init() {
   applyLanguage();
   currentMonth = new Date();
   // default selected date = today
-  selectedDateISO = null;
+  selectedDateISO = new Date().toISOString().slice(0, 10);
   renderCalendar();
   renderSlots(selectedDateISO);
 
