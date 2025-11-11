@@ -121,10 +121,24 @@ function renderCalendar() {
     dayEl.type = "button";
     dayEl.setAttribute("data-date", iso);
     dayEl.innerText = d.getDate();
-    dayEl.addEventListener("click", () => {
-      selectedDateISO = iso;
+
+    // *** CORRECTED DATE TOGGLE LOGIC ***
+    dayEl.addEventListener("click", (e) => {
+      const clickedISO = e.currentTarget.getAttribute("data-date");
+
+      if (selectedDateISO === clickedISO) {
+        // CASE 1: Same date clicked -> DESELECT and HIDE slots
+        selectedDateISO = null;
+        renderSlots(null); // renderSlots(null) handles hiding the slotsCard
+      } else {
+        // CASE 2: Different date clicked -> SELECT and SHOW slots
+        selectedDateISO = clickedISO;
+        renderSlots(clickedISO);
+      }
+
+      // CRITICAL: We call renderCalendar again to update the "selected" visual state
+      // based on the new value of the global variable `selectedDateISO`.
       renderCalendar();
-      renderSlots(iso);
     });
     calendarGrid.appendChild(dayEl);
   }
@@ -216,6 +230,32 @@ function openModalForSlot(date, time) {
   modal.style.display = "flex";
   inputName.focus();
 }
+
+function closeModal() {
+  modal.setAttribute("aria-hidden", "true");
+  modal.style.display = "none";
+  activeSlot = null;
+}
+
+/* helpers */
+function formatTimeForLocale(hm) {
+  const [hh, mm] = hm.split(":").map(Number);
+  return new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
+    lang === "el" ? "el-GR" : "en-US",
+    { hour: "numeric", minute: "2-digit" }
+  );
+}
+function escapeHtml(s) {
+  if (!s) return "";
+  return String(s).replace(
+    /[&<>"']/g,
+    (m) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+        m
+      ])
+  );
+}
+
 /* Save booking */
 saveBtn.addEventListener("click", () => {
   if (!activeSlot) return;
@@ -254,68 +294,6 @@ saveBtn.addEventListener("click", () => {
       setTimeout(() => bookedSlot.classList.remove("flash-booked"), 500);
     }
   }, 50); // Small delay to ensure renderSlots finishes
-});
-function closeModal() {
-  modal.setAttribute("aria-hidden", "true");
-  modal.style.display = "none";
-  activeSlot = null;
-}
-
-/* helpers */
-function formatTimeForLocale(hm) {
-  const [hh, mm] = hm.split(":").map(Number);
-  return new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
-    lang === "el" ? "el-GR" : "en-US",
-    { hour: "numeric", minute: "2-digit" }
-  );
-}
-function escapeHtml(s) {
-  if (!s) return "";
-  return String(s).replace(
-    /[&<>"']/g,
-    (m) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
-        m
-      ])
-  );
-}
-dayEl.addEventListener("click", (e) => {
-  const clickedISO = e.currentTarget.getAttribute("data-date");
-
-  if (selectedDateISO === clickedISO) {
-    // CASE 1: Same date clicked -> DESELECT and HIDE slots
-    selectedDateISO = null;
-    renderSlots(null); // renderSlots(null) handles hiding the slotsCard
-  } else {
-    // CASE 2: Different date clicked -> SELECT and SHOW slots
-    selectedDateISO = clickedISO;
-    renderSlots(clickedISO);
-  }
-
-  // CRITICAL: We call renderCalendar again to update the "selected" visual state
-  // based on the new value of the global variable `selectedDateISO`.
-  renderCalendar();
-});
-calendarGrid.appendChild(dayEl);
-
-/* Save booking */
-saveBtn.addEventListener("click", () => {
-  if (!activeSlot) return;
-  const name = inputName.value.trim();
-  const phone = inputPhone.value.trim();
-
-  if (!name) {
-    alert(STRINGS[lang].clientName + " is required");
-    inputName.focus();
-    return;
-  }
-
-  if (!appointments[activeSlot.date]) appointments[activeSlot.date] = {};
-  appointments[activeSlot.date][activeSlot.time] = { name, phone };
-  saveToStorage();
-  renderSlots(activeSlot.date);
-  renderCalendar();
-  closeModal();
 });
 
 /* Delete booking */
