@@ -175,7 +175,8 @@ function renderSlots(dateISO) {
   }
   slotsCard.style.display = "block";
   //label
-  const d = new Date(dateISO + "T00:00:00");
+  const parts = dateISO.split("-").map((p) => parseInt(p, 10)); // [YYYY, MM, DD]
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
     { weekday: "short", month: "short", day: "numeric", year: "numeric" }
@@ -393,9 +394,10 @@ function applyLanguage() {
 function init() {
   loadFromStorage();
   applyLanguage();
-  currentMonth = new Date();
+  const today = new Date();
+  currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   // default selected date = today
-  selectedDateISO = new Date().toISOString().slice(0, 10);
+  selectedDateISO = today.toISOString().slice(0, 10);
   renderCalendar();
   renderSlots(selectedDateISO);
 
