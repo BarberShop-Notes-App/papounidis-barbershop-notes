@@ -417,3 +417,9 @@ body {
     max-width: none;
   }
 }
+.slot.slot-booked-highlight .time,
+.slot.slot-booked-highlight .client {
+  color: var(--danger);
+  opacity: 1;
+  font-weight: 700;
+}

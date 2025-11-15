@@ -308,16 +308,21 @@ saveBtn.addEventListener("click", () => {
 
   closeModal();
 
-  // 2. ANIMATION CODE: Now uses the safe, local variable timeToFlash
+  // 2. *** MODIFIED ANIMATION CODE ***
   setTimeout(() => {
     // Select the newly rendered slot that is booked AND has the correct time
     const selector = `.slot.booked[data-time="${timeToFlash}"]`;
     const bookedSlot = slotsContainer.querySelector(selector);
 
     if (bookedSlot) {
+      // Add BOTH classes: one for the flash, one for the permanent red text
       bookedSlot.classList.add("flash-booked");
-      // Remove class after animation (500ms)
-      setTimeout(() => bookedSlot.classList.remove("flash-booked"), 500);
+      bookedSlot.classList.add("slot-booked-highlight");
+
+      // Remove ONLY the flash class after the animation (0.7s)
+      setTimeout(() => {
+        bookedSlot.classList.remove("flash-booked");
+      }, 700); // Match the animation duration in style.css
     }
   }, 50); // Small delay to ensure renderSlots finishes
 });
