@@ -39,7 +39,7 @@
       </header>
 
       <main class="content">
-        <section class="calendar-card card">
+        <section class="calendar-card card" id="calendarSection">
           <div class="cal-header">
             <button id="prevMonth" class="icon-btn" aria-label="Previous month">
               ‹
@@ -68,8 +68,15 @@
           ></div>
         </section>
 
-        <section class="slots-card card">
+        <section
+          class="slots-card card"
+          id="slotsSection"
+          style="display: none"
+        >
           <div class="slots-header">
+            <button id="backToCalendarBtn" class="btn ghost">
+              ‹ <span>Back</span>
+            </button>
             <div id="selectedLabel">Select a date</div>
           </div>
           <div id="slotsContainer" class="slots-grid" aria-live="polite"></div>

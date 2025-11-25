@@ -19,6 +19,7 @@ const STRINGS = {
     delete: "Delete",
     clearConfirm: "Clear all bookings? This cannot be undone.",
     installHint: "Offline · Add to home screen",
+    back: "Back",
   },
   el: {
     appTitle: "Papounidis-Barbershop",
@@ -34,6 +35,7 @@ const STRINGS = {
     clearConfirm:
       "Θα διαγράψετε όλες τις κρατήσεις; Η ενέργεια δεν αναστρέφεται.",
     installHint: "Offline · Προσθέστε στην αρχική οθόνη",
+    back: "Πίσω",
   },
 };
 
@@ -46,9 +48,12 @@ const selectedLabel = document.getElementById("selectedLabel");
 const slotsContainer = document.getElementById("slotsContainer");
 const langToggle = document.getElementById("langToggle");
 const clearBtn = document.getElementById("clearBtn");
-const lblFree = document.getElementById("lblFree");
-const lblBooked = document.getElementById("lblBooked");
 const installHint = document.getElementById("installHint");
+
+/* NEW DOM Elements for Layout Toggle */
+const calendarSection = document.getElementById("calendarSection");
+const slotsSection = document.getElementById("slotsSection");
+const backToCalendarBtn = document.getElementById("backToCalendarBtn");
 
 const modal = document.getElementById("modal");
 const modalTitle = document.getElementById("modalTitle");
@@ -59,7 +64,6 @@ const cancelBtn = document.getElementById("cancelBtn");
 const deleteBtn = document.getElementById("deleteBtn");
 const appTitleEl = document.getElementById("appTitle");
 const subtitleEl = document.getElementById("subtitle");
-const slotsCard = document.querySelector(".slots-card");
 
 let appointments = {}; // loaded from storage
 let currentMonth = new Date();
@@ -78,7 +82,7 @@ function loadFromStorage() {
     appointments = {};
   }
 }
-/* ✅ Local date helper (no UTC shift) */
+/* Local date helper (no UTC shift) */
 function toLocalISODate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -86,6 +90,47 @@ function toLocalISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
+/* VIEW SWITCHING LOGIC (Sequential Slides) */
+
+function showSlotsView() {
+  // 1. Animate Calendar Sliding OUT to the Left
+  calendarSection.classList.add("anim-exit-left");
+
+  // 2. Wait 300ms for animation to finish, then swap views
+  setTimeout(() => {
+    calendarSection.style.display = "none";
+    calendarSection.classList.remove("anim-exit-left"); // Cleanup
+
+    // 3. Show Slots and Animate IN from the Right
+    slotsSection.style.display = "block";
+
+    // Force reflow to ensure animation plays
+    void slotsSection.offsetWidth;
+
+    slotsSection.classList.remove("anim-enter-left", "anim-exit-right"); // Clean old classes
+    slotsSection.classList.add("anim-enter-right");
+  }, 280); // Slight overlap (280ms) makes it feel snappier
+}
+
+function showCalendarView() {
+  // 1. Animate Slots Sliding OUT to the Right
+  slotsSection.classList.add("anim-exit-right");
+
+  // 2. Wait for animation to finish
+  setTimeout(() => {
+    slotsSection.style.display = "none";
+    slotsSection.classList.remove("anim-exit-right"); // Cleanup
+
+    // 3. Show Calendar and Animate IN from the Left
+    calendarSection.style.display = "block";
+
+    // Force reflow
+    void calendarSection.offsetWidth;
+
+    calendarSection.classList.remove("anim-enter-right", "anim-exit-left"); // Clean old classes
+    calendarSection.classList.add("anim-enter-left");
+  }, 280);
+}
 /* Calendar helpers */
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -119,7 +164,7 @@ function renderCalendar() {
   for (let i = 0; i < slots; i++) {
     const d = new Date(firstShown);
     d.setDate(firstShown.getDate() + i);
-    const iso = toLocalISODate(d); // ✅ FIXED
+    const iso = toLocalISODate(d);
     const dayEl = document.createElement("button");
     dayEl.className = "day";
     if (d.getMonth() !== currentMonth.getMonth())
@@ -129,18 +174,14 @@ function renderCalendar() {
     dayEl.setAttribute("data-date", iso);
     dayEl.innerText = d.getDate();
 
-    // Corrected Date Toggle Logic
+    // Navigation Logic: Click Date -> Show Slots
     dayEl.addEventListener("click", (e) => {
       const clickedISO = e.currentTarget.getAttribute("data-date");
+      selectedDateISO = clickedISO;
 
-      if (selectedDateISO === clickedISO) {
-        selectedDateISO = null;
-        renderSlots(null);
-      } else {
-        selectedDateISO = clickedISO;
-        renderSlots(clickedISO);
-      }
-      renderCalendar(); // Rerender to update the 'selected' visual state
+      renderCalendar();
+      renderSlots(clickedISO);
+      showSlotsView();
     });
     calendarGrid.appendChild(dayEl);
   }
@@ -169,18 +210,10 @@ const TIMES = generateTimes();
 
 /* Display selected date & slots */
 function renderSlots(dateISO) {
-  if (!dateISO) {
-    slotsContainer.innerHTML = `<div class="placeholder">${STRINGS[lang].selectDate}</div>`;
-    selectedLabel.textContent = STRINGS[lang].selectDate;
-    slotsCard.style.display = "none";
-    return;
-  }
-  slotsCard.style.display = "block";
+  if (!dateISO) return;
 
-  // label: CRITICAL FIX for Timezone Bug (Nov 10 -> Nov 9 shift)
-  // We use Y, M, D components to force local date interpretation.
+  // Date Label Fix
   const parts = dateISO.split("-").map((p) => parseInt(p, 10)); // [YYYY, MM, DD]
-  // Date constructor uses (year, monthIndex, day)
   const d = new Date(parts[0], parts[1] - 1, parts[2]);
 
   selectedLabel.textContent = d.toLocaleDateString(
@@ -191,21 +224,8 @@ function renderSlots(dateISO) {
   slotsContainer.innerHTML = "";
   const dayAppts = appointments[dateISO] || {};
 
-  // *** PAGINATION LOGIC (2 rows of 3 boxes) ***
-  const ITEMS_PER_PAGE = 6;
-  let currentPage = null;
-
-  TIMES.forEach((time, index) => {
-    // 1. Create a new page every 6 items
-    if (index % ITEMS_PER_PAGE === 0) {
-      if (currentPage) {
-        slotsContainer.appendChild(currentPage); // Append the finished page
-      }
-      currentPage = document.createElement("div");
-      currentPage.className = "slot-page";
-    }
-
-    // 2. Create the time slot button (same as before)
+  // Standard Grid Layout (No slider, no pages)
+  TIMES.forEach((time) => {
     const btn = document.createElement("button");
     btn.className = "slot";
     btn.setAttribute("data-time", time);
@@ -215,8 +235,12 @@ function renderSlots(dateISO) {
       lang === "el" ? "el-GR" : "en-US",
       { hour: "numeric", minute: "2-digit" }
     );
+
     if (dayAppts[time]) {
       btn.classList.add("booked");
+      // Persist Red Text for Booked Slots
+      btn.classList.add("slot-booked-highlight");
+
       btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(
         dayAppts[time].name
       )}</div>`;
@@ -226,27 +250,18 @@ function renderSlots(dateISO) {
       btn.innerHTML = `<div class="time">${tDisplay}</div>`;
     }
     btn.addEventListener("click", () => openModalForSlot(dateISO, time));
-
-    // 3. Append the button to the current page
-    currentPage.appendChild(btn);
+    slotsContainer.appendChild(btn);
   });
-
-  // 4. Append the final page
-  if (currentPage) {
-    slotsContainer.appendChild(currentPage);
-  }
 }
 
 /* Modal handling */
 function openModalForSlot(date, time) {
   activeSlot = { date, time };
   const booking = (appointments[date] || {})[time] || null;
-  // Fill inputs or show existing
   inputName.value = booking ? booking.name : "";
   inputPhone.value = booking ? booking.phone : "";
-  // show delete button only if exists
   deleteBtn.style.display = booking ? "inline-block" : "none";
-  // labels/titles
+
   modalTitle.innerText = STRINGS[lang].save + " — " + formatTimeForLocale(time);
   document.getElementById("lblClient").innerText = STRINGS[lang].clientName;
   document.getElementById("lblPhone").innerText = STRINGS[lang].phone;
@@ -299,32 +314,25 @@ saveBtn.addEventListener("click", () => {
   if (!appointments[activeSlot.date]) appointments[activeSlot.date] = {};
   appointments[activeSlot.date][activeSlot.time] = { name, phone };
 
-  // 1. SAVE & RENDER
   saveToStorage();
   renderSlots(activeSlot.date);
   renderCalendar();
 
   const timeToFlash = activeSlot.time;
-
   closeModal();
 
-  // 2. *** MODIFIED ANIMATION CODE ***
+  // Animation logic
   setTimeout(() => {
-    // Select the newly rendered slot that is booked AND has the correct time
     const selector = `.slot.booked[data-time="${timeToFlash}"]`;
     const bookedSlot = slotsContainer.querySelector(selector);
-
     if (bookedSlot) {
-      // Add BOTH classes: one for the flash, one for the permanent red text
       bookedSlot.classList.add("flash-booked");
       bookedSlot.classList.add("slot-booked-highlight");
-
-      // Remove ONLY the flash class after the animation (0.7s)
       setTimeout(() => {
         bookedSlot.classList.remove("flash-booked");
-      }, 700); // Match the animation duration in style.css
+      }, 700);
     }
-  }, 50); // Small delay to ensure renderSlots finishes
+  }, 50);
 });
 
 /* Delete booking */
@@ -336,7 +344,6 @@ deleteBtn.addEventListener("click", () => {
       appointments[activeSlot.date][activeSlot.time]
     ) {
       delete appointments[activeSlot.date][activeSlot.time];
-      // if day empty remove date key
       if (Object.keys(appointments[activeSlot.date]).length === 0)
         delete appointments[activeSlot.date];
       saveToStorage();
@@ -352,7 +359,7 @@ modal.addEventListener("click", (e) => {
   if (e.target === modal) closeModal();
 });
 
-/* Month navigation */
+/* Navigation Listeners */
 prevMonthBtn.addEventListener("click", () => {
   currentMonth = new Date(
     currentMonth.getFullYear(),
@@ -369,8 +376,11 @@ nextMonthBtn.addEventListener("click", () => {
   );
   renderCalendar();
 });
+backToCalendarBtn.addEventListener("click", () => {
+  showCalendarView();
+});
 
-/* Clear all bookings */
+/* Clear/Language Listeners */
 clearBtn.addEventListener("click", () => {
   if (confirm(STRINGS[lang].clearConfirm)) {
     appointments = {};
@@ -379,8 +389,6 @@ clearBtn.addEventListener("click", () => {
     renderCalendar();
   }
 });
-
-/* Language toggle */
 langToggle.addEventListener("click", () => {
   lang = lang === "en" ? "el" : "en";
   localStorage.setItem(LANG_KEY, lang);
@@ -389,34 +397,28 @@ langToggle.addEventListener("click", () => {
   renderSlots(selectedDateISO);
 });
 
-/* apply language labels */
 function applyLanguage() {
   appTitleEl.innerText = STRINGS[lang].appTitle;
   subtitleEl.innerText = STRINGS[lang].subtitle;
-  //lblFree.innerText = STRINGS[lang].free;
-  //lblBooked.innerText = STRINGS[lang].booked;
-  installHint.innerText = STRINGS[lang].installHint;
   langToggle.innerText = lang === "en" ? "Ελληνικά" : "English";
+
+  // Update Back Button Text
+  backToCalendarBtn.innerHTML = `‹ <span>${STRINGS[lang].back}</span>`;
 }
 
-/* Init: CORRECTED FOR BLANK/WRONG MONTH ISSUE */
 function init() {
   loadFromStorage();
   applyLanguage();
 
   const today = new Date();
-
-  // FIX 1: Initialize currentMonth to the START of today's month (e.g., Nov 1st)
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  selectedDateISO = toLocalISODate(today);
 
-  // FIX 2: Initialize selectedDateISO to today's date string (e.g., "2025-11-11")
-  selectedDateISO = toLocalISODate(today); // ✅ FIXED
-
-  // These two calls should now reliably render the correct view on load.
+  // Initialize view: Show Calendar first
   renderCalendar();
   renderSlots(selectedDateISO);
+  showCalendarView();
 
-  // register service worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker

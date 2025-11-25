@@ -1,6 +1,6 @@
 /* Modern minimal grey/dark theme - mobile-first */
 
-/* Background image - use relative path; place your file at ./photos/background.jpg */
+/* Background image - use relative path; place your file at ./photos/background.JPG */
 :root {
   --bg-image: url("./photos/background.JPG");
   --bg-overlay: rgba(6, 8, 10, 0.78);
@@ -120,12 +120,16 @@ body {
   flex-direction: column;
   gap: 10px;
   padding-bottom: 10px;
+
+  /* Centers the calendar/slots vertically on the screen */
+  flex-grow: 1;
+  justify-content: center;
 }
 
-/* *** CORRECTED: "Frosted Glass" transparency for readability *** */
+/* Card Styling (Frosted Glass) */
 .card {
-  background: rgba(15, 17, 18, 0.75); /* 75% solid dark background */
-  backdrop-filter: blur(10px); /* Optional: Adds a nice blur effect */
+  background: rgba(15, 17, 18, 0.75);
+  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: var(--radius);
   padding: 12px;
@@ -195,17 +199,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
+/* Back Button Styling */
+#backToCalendarBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
 .slots-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
-/* *** CORRECTED: Semi-transparent background for slots *** */
+/* Slot Styling */
 .slot {
-  background: rgba(26, 28, 30, 0.85); /* 85% solid dark background */
+  background: rgba(26, 28, 30, 0.85);
   padding: 10px;
   border-radius: 10px;
   min-height: 58px;
@@ -302,7 +315,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.04);
   background: transparent;
   color: var(--text);
-  font-size: 16px; /* <-- FIXES iOS ZOOM BUG */
+  font-size: 16px; /* Fixes iOS Zoom */
 }
 
 /* modal actions */
@@ -335,91 +348,91 @@ body {
     min-height: 64px;
   }
 }
-/* Placeholder for slots */
-.placeholder {
-  grid-column: 1 / -1; /* spans all columns */
-  text-align: center;
-  padding: 40px 10px;
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 500;
-  border-radius: 10px;
-  /* Use the same semi-transparent background as the slot buttons */
-  background: rgba(26, 28, 30, 0.85);
-}
-/* Clean, Theme-Matching Animation: Danger Glow Pulse */
 
+/* Danger Glow Pulse Animation */
 @keyframes danger-glow-pulse {
   0% {
     transform: scale(1);
-    /* Red color used for the initial glow: var(--danger) is #ef4444 */
     box-shadow: 0 0 0 0 var(--danger), 0 0 0 0 rgba(239, 68, 68, 0.7);
   }
   50% {
-    transform: scale(1.02); /* Subtle lift */
-    /* Glow expands and fades out using the red color */
+    transform: scale(1.02);
     box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.2),
       0 0 0 10px rgba(239, 68, 68, 0);
   }
   100% {
     transform: scale(1);
-    box-shadow: none; /* Return to no temporary shadow */
+    box-shadow: none;
   }
 }
 
-/* Apply the animation to the slot button */
 .slot.flash-booked {
-  /* Use the new animation name */
   animation: danger-glow-pulse 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94)
     forwards;
   position: relative;
   z-index: 10;
-
-  /* These are the standard booked styles that the animation keeps */
   background: rgba(178, 34, 34, 0.06);
   color: var(--danger);
 }
 
-/* *** CORRECTED: Mobile "Paged Slider" for time slots *** */
-@media (max-width: 600px) {
-  /* This is the main slider container */
-  #slotsContainer {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 15px;
-    gap: 10px; /* This is the gap BETWEEN pages */
-
-    /* Snap to the PAGES */
-    scroll-snap-type: x mandatory;
-
-    /* We remove the grid properties from here */
-    grid-template-columns: unset;
-  }
-
-  /* This is the new "Page" element (holds 6 boxes) */
-  .slot-page {
-    flex-shrink: 0;
-    width: 100%; /* Each page is full width */
-    scroll-snap-align: start; /* Snap to this element */
-
-    /* This grid organizes the 6 boxes INSIDE the page */
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px; /* Gap between time boxes */
-  }
-
-  /* The time boxes no longer control snapping */
-  .slot {
-    flex-shrink: 0;
-    width: auto; /* Width is controlled by the .slot-page grid */
-    max-width: none;
-  }
-}
+/* Permanent highlight for booked slots (Red Text) */
 .slot.slot-booked-highlight .time,
 .slot.slot-booked-highlight .client {
   color: var(--danger);
   opacity: 1;
   font-weight: 700;
+}
+
+/* --- NAVIGATION ANIMATIONS --- */
+
+/* 1. Forward: Calendar Exits Left */
+@keyframes slideOutLeft {
+  to {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+}
+.anim-exit-left {
+  animation: slideOutLeft 0.3s ease-in forwards;
+}
+
+/* 2. Forward: Slots Enter from Right */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.anim-enter-right {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+/* 3. Back: Slots Exit Right */
+@keyframes slideOutRight {
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+.anim-exit-right {
+  animation: slideOutRight 0.3s ease-in forwards;
+}
+
+/* 4. Back: Calendar Enters from Left */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.anim-enter-left {
+  animation: slideInLeft 0.3s ease-out forwards;
 }
