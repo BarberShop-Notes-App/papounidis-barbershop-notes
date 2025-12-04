@@ -20,6 +20,8 @@ const STRINGS = {
     clearConfirm: "Clear all bookings? This cannot be undone.",
     installHint: "Offline · Add to home screen",
     back: "Back",
+    // NEW: Day names starting with Monday
+    weekdays: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
   },
   el: {
     appTitle: "Papounidis-Barbershop",
@@ -36,12 +38,16 @@ const STRINGS = {
       "Θα διαγράψετε όλες τις κρατήσεις; Η ενέργεια δεν αναστρέφεται.",
     installHint: "Offline · Προσθέστε στην αρχική οθόνη",
     back: "Πίσω",
+    // NEW: Greek day names starting with Monday
+    weekdays: ["Δε", "Τρ", "Τε", "Πέ", "Πα", "Σά", "Κυ"],
   },
 };
 
 /* DOM */
 const monthLabel = document.getElementById("monthLabel");
 const calendarGrid = document.getElementById("calendarGrid");
+// NEW: Select the row for weekdays to update it dynamically
+const weekdayRow = document.querySelector(".weekday-row");
 const prevMonthBtn = document.getElementById("prevMonth");
 const nextMonthBtn = document.getElementById("nextMonth");
 const selectedLabel = document.getElementById("selectedLabel");
@@ -50,7 +56,7 @@ const langToggle = document.getElementById("langToggle");
 const clearBtn = document.getElementById("clearBtn");
 const installHint = document.getElementById("installHint");
 
-/* NEW DOM Elements for Layout Toggle */
+/* DOM Elements for Layout Toggle */
 const calendarSection = document.getElementById("calendarSection");
 const slotsSection = document.getElementById("slotsSection");
 const backToCalendarBtn = document.getElementById("backToCalendarBtn");
@@ -82,7 +88,6 @@ function loadFromStorage() {
     appointments = {};
   }
 }
-/* Local date helper (no UTC shift) */
 function toLocalISODate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -91,46 +96,36 @@ function toLocalISODate(date) {
 }
 
 /* VIEW SWITCHING LOGIC (Sequential Slides) */
-
 function showSlotsView() {
-  // 1. Animate Calendar Sliding OUT to the Left
   calendarSection.classList.add("anim-exit-left");
 
-  // 2. Wait 300ms for animation to finish, then swap views
   setTimeout(() => {
     calendarSection.style.display = "none";
-    calendarSection.classList.remove("anim-exit-left"); // Cleanup
+    calendarSection.classList.remove("anim-exit-left");
 
-    // 3. Show Slots and Animate IN from the Right
     slotsSection.style.display = "block";
-
-    // Force reflow to ensure animation plays
     void slotsSection.offsetWidth;
 
-    slotsSection.classList.remove("anim-enter-left", "anim-exit-right"); // Clean old classes
+    slotsSection.classList.remove("anim-enter-left", "anim-exit-right");
     slotsSection.classList.add("anim-enter-right");
-  }, 280); // Slight overlap (280ms) makes it feel snappier
+  }, 280);
 }
 
 function showCalendarView() {
-  // 1. Animate Slots Sliding OUT to the Right
   slotsSection.classList.add("anim-exit-right");
 
-  // 2. Wait for animation to finish
   setTimeout(() => {
     slotsSection.style.display = "none";
-    slotsSection.classList.remove("anim-exit-right"); // Cleanup
+    slotsSection.classList.remove("anim-exit-right");
 
-    // 3. Show Calendar and Animate IN from the Left
     calendarSection.style.display = "block";
-
-    // Force reflow
     void calendarSection.offsetWidth;
 
-    calendarSection.classList.remove("anim-enter-right", "anim-exit-left"); // Clean old classes
+    calendarSection.classList.remove("anim-enter-right", "anim-exit-left");
     calendarSection.classList.add("anim-enter-left");
   }, 280);
 }
+
 /* Calendar helpers */
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -146,6 +141,17 @@ function formatMonthLabel(d) {
   });
 }
 
+/* NEW: Render Weekday Header (Mon-Sun) based on language */
+function renderWeekdays() {
+  weekdayRow.innerHTML = "";
+  const days = STRINGS[lang].weekdays;
+  days.forEach((dayName) => {
+    const div = document.createElement("div");
+    div.innerText = dayName;
+    weekdayRow.appendChild(div);
+  });
+}
+
 /* Render calendar */
 function renderCalendar() {
   calendarGrid.innerHTML = "";
@@ -153,8 +159,12 @@ function renderCalendar() {
 
   const start = startOfMonth(currentMonth);
   const end = endOfMonth(currentMonth);
-  const startDow = start.getDay(); // 0 = Sunday
-  const prevFill = startDow;
+
+  // LOGIC CHANGE: Make Monday the start of the week
+  let startDow = start.getDay(); // 0 = Sunday, 1 = Monday...
+  if (startDow === 0) startDow = 7; // Convert Sunday to 7
+  const prevFill = startDow - 1; // Days to fill before the 1st (Mon=0 fill, Tue=1 fill...)
+
   const totalDays = prevFill + end.getDate();
   const slots = Math.ceil(totalDays / 7) * 7;
 
@@ -174,7 +184,6 @@ function renderCalendar() {
     dayEl.setAttribute("data-date", iso);
     dayEl.innerText = d.getDate();
 
-    // Navigation Logic: Click Date -> Show Slots
     dayEl.addEventListener("click", (e) => {
       const clickedISO = e.currentTarget.getAttribute("data-date");
       selectedDateISO = clickedISO;
@@ -187,7 +196,7 @@ function renderCalendar() {
   }
 }
 
-/* Time slot generation: 07:00 to 24:00 every 20 minutes */
+/* Time slot generation */
 function generateTimes() {
   const slots = [];
   let h = 7,
@@ -212,8 +221,7 @@ const TIMES = generateTimes();
 function renderSlots(dateISO) {
   if (!dateISO) return;
 
-  // Date Label Fix
-  const parts = dateISO.split("-").map((p) => parseInt(p, 10)); // [YYYY, MM, DD]
+  const parts = dateISO.split("-").map((p) => parseInt(p, 10));
   const d = new Date(parts[0], parts[1] - 1, parts[2]);
 
   selectedLabel.textContent = d.toLocaleDateString(
@@ -224,7 +232,6 @@ function renderSlots(dateISO) {
   slotsContainer.innerHTML = "";
   const dayAppts = appointments[dateISO] || {};
 
-  // Standard Grid Layout (No slider, no pages)
   TIMES.forEach((time) => {
     const btn = document.createElement("button");
     btn.className = "slot";
@@ -238,9 +245,7 @@ function renderSlots(dateISO) {
 
     if (dayAppts[time]) {
       btn.classList.add("booked");
-      // Persist Red Text for Booked Slots
       btn.classList.add("slot-booked-highlight");
-
       btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(
         dayAppts[time].name
       )}</div>`;
@@ -321,7 +326,6 @@ saveBtn.addEventListener("click", () => {
   const timeToFlash = activeSlot.time;
   closeModal();
 
-  // Animation logic
   setTimeout(() => {
     const selector = `.slot.booked[data-time="${timeToFlash}"]`;
     const bookedSlot = slotsContainer.querySelector(selector);
@@ -401,20 +405,20 @@ function applyLanguage() {
   appTitleEl.innerText = STRINGS[lang].appTitle;
   subtitleEl.innerText = STRINGS[lang].subtitle;
   langToggle.innerText = lang === "en" ? "Ελληνικά" : "English";
-
-  // Update Back Button Text
   backToCalendarBtn.innerHTML = `‹ <span>${STRINGS[lang].back}</span>`;
+
+  // NEW: Update Weekday names when language changes
+  renderWeekdays();
 }
 
 function init() {
   loadFromStorage();
-  applyLanguage();
+  applyLanguage(); // This now calls renderWeekdays() to populate the header
 
   const today = new Date();
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   selectedDateISO = toLocalISODate(today);
 
-  // Initialize view: Show Calendar first
   renderCalendar();
   renderSlots(selectedDateISO);
   showCalendarView();
