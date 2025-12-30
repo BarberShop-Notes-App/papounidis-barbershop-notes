@@ -177,6 +177,9 @@ function renderCalendar() {
     const iso = toLocalISODate(d);
     const dayEl = document.createElement("button");
     dayEl.className = "day";
+    const now = new Date();
+    const todayISO = toLocalISODate(now);
+    if (iso === todayISO) dayEl.classList.add("today");
     if (d.getMonth() !== currentMonth.getMonth())
       dayEl.classList.add("inactive");
     if (iso === selectedDateISO) dayEl.classList.add("selected");
