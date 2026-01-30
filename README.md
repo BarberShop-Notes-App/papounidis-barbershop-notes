@@ -8,8 +8,8 @@ A simple Progressive Web App (PWA) designed specifically for Papounidis-Barbersh
 
 This app is hosted on a private link for limited access.
 
-**LIVE URL:** `[INSERT THE FINAL HTTPS URL FROM GITHUB PAGES/VERCEL HERE]`
-_(The URL will look something like: `https://yourusername.github.io/papounidis-barbershop-app/`)_
+**LIVE URL:** `[]`
+
 
 ### **📱 How to Install on a Mobile Device (PWA)**
 
