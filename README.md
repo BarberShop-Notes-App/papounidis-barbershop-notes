@@ -8,7 +8,7 @@ A simple Progressive Web App (PWA) designed specifically for Papounidis-Barbersh
 
 This app is hosted on a private link for limited access.
 
-**LIVE URL:** `[]`
+
 
 
 ### **📱 How to Install on a Mobile Device (PWA)**
