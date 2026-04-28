@@ -20,8 +20,9 @@ const STRINGS = {
     clearConfirm: "Clear all bookings? This cannot be undone.",
     installHint: "Offline · Add to home screen",
     back: "Back",
-    // NEW: Day names starting with Monday
     weekdays: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
+    labelWeekly: "This Week",
+    labelMonthly: "This Month",
   },
   el: {
     appTitle: "Papounidis-Barbershop",
@@ -38,15 +39,15 @@ const STRINGS = {
       "Θα διαγράψετε όλες τις κρατήσεις; Η ενέργεια δεν αναστρέφεται.",
     installHint: "Offline · Προσθέστε στην αρχική οθόνη",
     back: "Πίσω",
-    // NEW: Greek day names starting with Monday
     weekdays: ["Δε", "Τρ", "Τε", "Πέ", "Πα", "Σά", "Κυ"],
+    labelWeekly: "Εβδομάδα",
+    labelMonthly: "Μήνας",
   },
 };
 
 /* DOM */
 const monthLabel = document.getElementById("monthLabel");
 const calendarGrid = document.getElementById("calendarGrid");
-// NEW: Select the row for weekdays to update it dynamically
 const weekdayRow = document.querySelector(".weekday-row");
 const prevMonthBtn = document.getElementById("prevMonth");
 const nextMonthBtn = document.getElementById("nextMonth");
@@ -71,10 +72,10 @@ const deleteBtn = document.getElementById("deleteBtn");
 const appTitleEl = document.getElementById("appTitle");
 const subtitleEl = document.getElementById("subtitle");
 
-let appointments = {}; // loaded from storage
+let appointments = {};
 let currentMonth = new Date();
-let selectedDateISO = null; // default today
-let activeSlot = null; // {date, time}
+let selectedDateISO = null;
+let activeSlot = null;
 let lang = localStorage.getItem(LANG_KEY) || "en";
 
 /* Utilities */
@@ -95,17 +96,20 @@ function toLocalISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
-/* VIEW SWITCHING LOGIC (Sequential Slides) */
+/* Safe ISO → local Date (avoids UTC midnight timezone shift) */
+function isoToLocalDate(dateISO) {
+  const [y, mo, da] = dateISO.split("-").map(Number);
+  return new Date(y, mo - 1, da);
+}
+
+/* VIEW SWITCHING LOGIC */
 function showSlotsView() {
   calendarSection.classList.add("anim-exit-left");
-
   setTimeout(() => {
     calendarSection.style.display = "none";
     calendarSection.classList.remove("anim-exit-left");
-
     slotsSection.style.display = "block";
     void slotsSection.offsetWidth;
-
     slotsSection.classList.remove("anim-enter-left", "anim-exit-right");
     slotsSection.classList.add("anim-enter-right");
   }, 280);
@@ -113,14 +117,11 @@ function showSlotsView() {
 
 function showCalendarView() {
   slotsSection.classList.add("anim-exit-right");
-
   setTimeout(() => {
     slotsSection.style.display = "none";
     slotsSection.classList.remove("anim-exit-right");
-
     calendarSection.style.display = "block";
     void calendarSection.offsetWidth;
-
     calendarSection.classList.remove("anim-enter-right", "anim-exit-left");
     calendarSection.classList.add("anim-enter-left");
   }, 280);
@@ -133,7 +134,6 @@ function startOfMonth(d) {
 function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
-
 function formatMonthLabel(d) {
   return d.toLocaleString(lang === "el" ? "el-GR" : "en-US", {
     month: "long",
@@ -141,7 +141,7 @@ function formatMonthLabel(d) {
   });
 }
 
-/* NEW: Render Weekday Header (Mon-Sun) based on language */
+/* Render Weekday Header */
 function renderWeekdays() {
   weekdayRow.innerHTML = "";
   const days = STRINGS[lang].weekdays;
@@ -160,10 +160,9 @@ function renderCalendar() {
   const start = startOfMonth(currentMonth);
   const end = endOfMonth(currentMonth);
 
-  // LOGIC CHANGE: Make Monday the start of the week
-  let startDow = start.getDay(); // 0 = Sunday, 1 = Monday...
-  if (startDow === 0) startDow = 7; // Convert Sunday to 7
-  const prevFill = startDow - 1; // Days to fill before the 1st (Mon=0 fill, Tue=1 fill...)
+  let startDow = start.getDay();
+  if (startDow === 0) startDow = 7;
+  const prevFill = startDow - 1;
 
   const totalDays = prevFill + end.getDate();
   const slots = Math.ceil(totalDays / 7) * 7;
@@ -190,7 +189,6 @@ function renderCalendar() {
     dayEl.addEventListener("click", (e) => {
       const clickedISO = e.currentTarget.getAttribute("data-date");
       selectedDateISO = clickedISO;
-
       renderCalendar();
       renderSlots(clickedISO);
       showSlotsView();
@@ -224,12 +222,10 @@ const TIMES = generateTimes();
 function renderSlots(dateISO) {
   if (!dateISO) return;
 
-  const parts = dateISO.split("-").map((p) => parseInt(p, 10));
-  const d = new Date(parts[0], parts[1] - 1, parts[2]);
-
+  const d = isoToLocalDate(dateISO);
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
-    { weekday: "short", month: "short", day: "numeric", year: "numeric" }
+    { weekday: "short", month: "short", day: "numeric", year: "numeric" },
   );
 
   slotsContainer.innerHTML = "";
@@ -243,14 +239,14 @@ function renderSlots(dateISO) {
     const [hh, mm] = time.split(":").map(Number);
     const tDisplay = new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
       lang === "el" ? "el-GR" : "en-US",
-      { hour: "numeric", minute: "2-digit" }
+      { hour: "numeric", minute: "2-digit" },
     );
 
     if (dayAppts[time]) {
       btn.classList.add("booked");
       btn.classList.add("slot-booked-highlight");
       btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(
-        dayAppts[time].name
+        dayAppts[time].name,
       )}</div>`;
       btn.disabled = false;
     } else {
@@ -293,7 +289,7 @@ function formatTimeForLocale(hm) {
   const [hh, mm] = hm.split(":").map(Number);
   return new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
     lang === "el" ? "el-GR" : "en-US",
-    { hour: "numeric", minute: "2-digit" }
+    { hour: "numeric", minute: "2-digit" },
   );
 }
 function escapeHtml(s) {
@@ -301,9 +297,9 @@ function escapeHtml(s) {
   return String(s).replace(
     /[&<>"']/g,
     (m) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
         m
-      ])
+      ],
   );
 }
 
@@ -325,6 +321,7 @@ saveBtn.addEventListener("click", () => {
   saveToStorage();
   renderSlots(activeSlot.date);
   renderCalendar();
+  updateStats(); /* ← FIXED: update stats after every save */
 
   const timeToFlash = activeSlot.time;
   closeModal();
@@ -356,6 +353,7 @@ deleteBtn.addEventListener("click", () => {
       saveToStorage();
       renderSlots(activeSlot.date);
       renderCalendar();
+      updateStats(); /* ← FIXED: update stats after every delete */
       closeModal();
     }
   }
@@ -371,7 +369,7 @@ prevMonthBtn.addEventListener("click", () => {
   currentMonth = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth() - 1,
-    1
+    1,
   );
   renderCalendar();
 });
@@ -379,7 +377,7 @@ nextMonthBtn.addEventListener("click", () => {
   currentMonth = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth() + 1,
-    1
+    1,
   );
   renderCalendar();
 });
@@ -394,6 +392,7 @@ clearBtn.addEventListener("click", () => {
     saveToStorage();
     renderSlots(selectedDateISO);
     renderCalendar();
+    updateStats(); /* ← FIXED: update stats after manual clear */
   }
 });
 langToggle.addEventListener("click", () => {
@@ -410,13 +409,106 @@ function applyLanguage() {
   langToggle.innerText = lang === "en" ? "Ελληνικά" : "English";
   backToCalendarBtn.innerHTML = `‹ <span>${STRINGS[lang].back}</span>`;
 
-  // NEW: Update Weekday names when language changes
+  /* Update stats labels when language changes */
+  const labelWeeklyEl = document.getElementById("labelWeekly");
+  const labelMonthlyEl = document.getElementById("labelMonthly");
+  if (labelWeeklyEl) labelWeeklyEl.innerText = STRINGS[lang].labelWeekly;
+  if (labelMonthlyEl) labelMonthlyEl.innerText = STRINGS[lang].labelMonthly;
+
   renderWeekdays();
+}
+
+/* ─────────────────────────────────────────────
+   STATS  — counts only current week & current month
+   Uses isoToLocalDate() to avoid UTC timezone shift
+   ───────────────────────────────────────────── */
+function getStartOfWeek(now) {
+  const d = new Date(now);
+  const day = d.getDay(); // 0 = Sunday
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday-based
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function updateStats() {
+  let weeklyTotal = 0;
+  let monthlyTotal = 0;
+
+  const now = new Date();
+  const curMonth = now.getMonth();
+  const curYear = now.getFullYear();
+
+  const weekStart = getStartOfWeek(now);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  for (const dateISO in appointments) {
+    const apptDate = isoToLocalDate(dateISO); /* ← FIXED: no UTC shift */
+    const dailyCount = Object.keys(appointments[dateISO]).length;
+
+    if (
+      apptDate.getMonth() === curMonth &&
+      apptDate.getFullYear() === curYear
+    ) {
+      monthlyTotal += dailyCount;
+    }
+
+    if (apptDate >= weekStart && apptDate <= weekEnd) {
+      weeklyTotal += dailyCount;
+    }
+  }
+
+  document.getElementById("weeklyCount").innerText = weeklyTotal;
+  document.getElementById("monthlyCount").innerText = monthlyTotal;
+}
+
+/* ─────────────────────────────────────────────
+   PERIODIC RESET
+   • Monthly: clears ALL appointments on the 1st of each new month
+   • Weekly:  clears appointments older than current Mon on each new week
+   Both checks run silently at app start — data is only removed when
+   the period has genuinely changed (key mismatch).
+   ───────────────────────────────────────────── */
+function checkPeriodicReset() {
+  const now = new Date();
+
+  /* ── Monthly reset ── */
+  const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
+  const lastMonthReset = localStorage.getItem("papounidis_last_reset");
+
+  if (lastMonthReset && lastMonthReset !== currentMonthKey) {
+    appointments = {};
+    saveToStorage();
+    console.log("New month: all appointments cleared.");
+  }
+  localStorage.setItem("papounidis_last_reset", currentMonthKey);
+
+  /* ── Weekly reset ── */
+  const weekStart = getStartOfWeek(now);
+  const currentWeekKey = toLocalISODate(weekStart); // e.g. "2025-05-12"
+  const lastWeekKey = localStorage.getItem("papounidis_last_week");
+
+  if (lastWeekKey && lastWeekKey !== currentWeekKey) {
+    // Remove any appointments that belong to a previous week
+    // (within the same month — cross-month ones are already gone)
+    for (const dateISO in appointments) {
+      const apptDate = isoToLocalDate(dateISO);
+      if (apptDate < weekStart) {
+        delete appointments[dateISO];
+      }
+    }
+    saveToStorage();
+    console.log("New week: previous week appointments cleared.");
+  }
+  localStorage.setItem("papounidis_last_week", currentWeekKey);
 }
 
 function init() {
   loadFromStorage();
-  applyLanguage(); // This now calls renderWeekdays() to populate the header
+  checkPeriodicReset(); /* replaces old checkMonthlyReset */
+  applyLanguage();
 
   const today = new Date();
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -425,6 +517,7 @@ function init() {
   renderCalendar();
   renderSlots(selectedDateISO);
   showCalendarView();
+  updateStats(); /* draw correct counts on load */
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
