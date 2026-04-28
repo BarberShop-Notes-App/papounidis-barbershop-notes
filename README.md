@@ -35,7 +35,7 @@ Installing the app makes it available directly from your phone's home screen, co
 
 Any time changes are made to `index.html`, `style.css`, `app.js`, or any asset files (like `scissors.png`), you **MUST** update the Service Worker cache version.
 
-1.  Edit **`service-worker.js`**.
+1.  Edit *`service-worker.js`*.
 2.  Change the `CACHE_NAME` constant (e.g., from `"papounidis-shell-v5"` to `"papounidis-shell-v6"`).
 3.  Push the changes to GitHub and redeploy. This forces client browsers to fetch the new files.
 
