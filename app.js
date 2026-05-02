@@ -1,10 +1,17 @@
-/* app.js - Calendar + time slots + name+phone bookings (localStorage) */
+/* app.js - Calendar + time slots + name+phone bookings (IndexedDB) */
 
-/* STORAGE KEYS */
-const STORAGE_KEY = "papounidis_appointments_v1";
+/* ─────────────────────────────────────────
+   STORAGE CONFIG
+   ───────────────────────────────────────── */
+const DB_NAME = "papounidis_db";
+const DB_VERSION = 1;
+const STORE_NAME = "appointments";
+const RECORD_KEY = "all"; // single JSON blob
 const LANG_KEY = "papounidis_lang";
 
-/* LOCALIZATION */
+/* ─────────────────────────────────────────
+   LOCALIZATION
+   ───────────────────────────────────────── */
 const STRINGS = {
   en: {
     appTitle: "Papounidis-Barbershop",
@@ -21,8 +28,6 @@ const STRINGS = {
     installHint: "Offline · Add to home screen",
     back: "Back",
     weekdays: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
-    labelWeekly: "This Week",
-    labelMonthly: "This Month",
   },
   el: {
     appTitle: "Papounidis-Barbershop",
@@ -40,12 +45,12 @@ const STRINGS = {
     installHint: "Offline · Προσθέστε στην αρχική οθόνη",
     back: "Πίσω",
     weekdays: ["Δε", "Τρ", "Τε", "Πέ", "Πα", "Σά", "Κυ"],
-    labelWeekly: "Εβδομάδα",
-    labelMonthly: "Μήνας",
   },
 };
 
-/* DOM */
+/* ─────────────────────────────────────────
+   DOM REFS
+   ───────────────────────────────────────── */
 const monthLabel = document.getElementById("monthLabel");
 const calendarGrid = document.getElementById("calendarGrid");
 const weekdayRow = document.querySelector(".weekday-row");
@@ -55,13 +60,16 @@ const selectedLabel = document.getElementById("selectedLabel");
 const slotsContainer = document.getElementById("slotsContainer");
 const langToggle = document.getElementById("langToggle");
 const clearBtn = document.getElementById("clearBtn");
-const installHint = document.getElementById("installHint");
-
-/* DOM Elements for Layout Toggle */
+const exportBtn = document.getElementById("exportBtn");
+const importFileInput = document.getElementById("importFileInput");
+const importBtn = document.getElementById("importBtn");
+const menuBtn = document.getElementById("menuBtn");
+const drawer = document.getElementById("drawer");
+const drawerOverlay = document.getElementById("drawerOverlay");
+const drawerCloseBtn = document.getElementById("drawerCloseBtn");
 const calendarSection = document.getElementById("calendarSection");
 const slotsSection = document.getElementById("slotsSection");
 const backToCalendarBtn = document.getElementById("backToCalendarBtn");
-
 const modal = document.getElementById("modal");
 const modalTitle = document.getElementById("modalTitle");
 const inputName = document.getElementById("inputName");
@@ -72,23 +80,181 @@ const deleteBtn = document.getElementById("deleteBtn");
 const appTitleEl = document.getElementById("appTitle");
 const subtitleEl = document.getElementById("subtitle");
 
+/* ─────────────────────────────────────────
+   STATE
+   ───────────────────────────────────────── */
 let appointments = {};
 let currentMonth = new Date();
 let selectedDateISO = null;
 let activeSlot = null;
 let lang = localStorage.getItem(LANG_KEY) || "en";
+let db = null; // IndexedDB instance
 
-/* Utilities */
-function saveToStorage() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
+/* ═════════════════════════════════════════
+   INDEXEDDB  — open / read / write
+   ═════════════════════════════════════════ */
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+
+    req.onupgradeneeded = (e) => {
+      const idb = e.target.result;
+      if (!idb.objectStoreNames.contains(STORE_NAME)) {
+        idb.createObjectStore(STORE_NAME);
+      }
+    };
+
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
 }
-function loadFromStorage() {
+
+function dbGet(idb, key) {
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbPut(idb, key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE_NAME, "readwrite");
+    const req = tx.objectStore(STORE_NAME).put(value, key);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadFromDB() {
   try {
-    appointments = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    const data = await dbGet(db, RECORD_KEY);
+
+    if (data && Object.keys(data).length > 0) {
+      // IndexedDB already has data — normal load, nothing to migrate
+      appointments = data;
+    } else {
+      // IndexedDB is empty (first launch after update).
+      // Check if the old localStorage has appointments and migrate them.
+      let migrated = {};
+      try {
+        migrated =
+          JSON.parse(localStorage.getItem("papounidis_appointments_v1")) || {};
+      } catch (_) {}
+
+      appointments = migrated;
+
+      if (Object.keys(migrated).length > 0) {
+        // Save migrated data into IndexedDB so next launch reads from there
+        await saveToDB();
+        console.log(
+          "Migrated",
+          Object.keys(migrated).length,
+          "days from localStorage to IndexedDB.",
+        );
+      }
+    }
   } catch (e) {
-    appointments = {};
+    // IndexedDB completely unavailable — fall back to localStorage as last resort
+    console.warn("IndexedDB read failed:", e);
+    try {
+      appointments =
+        JSON.parse(localStorage.getItem("papounidis_appointments_v1")) || {};
+    } catch (_) {
+      appointments = {};
+    }
   }
 }
+
+async function saveToDB() {
+  try {
+    await dbPut(db, RECORD_KEY, appointments);
+  } catch (e) {
+    console.error("IndexedDB write failed:", e);
+    // Last-resort fallback so no data is lost silently
+    try {
+      localStorage.setItem(
+        "papounidis_appointments_v1",
+        JSON.stringify(appointments),
+      );
+    } catch (_) {}
+  }
+}
+
+/* ═════════════════════════════════════════
+   EXPORT / IMPORT  (manual + auto)
+   ═════════════════════════════════════════ */
+
+function triggerExport() {
+  const json = JSON.stringify(appointments, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `papounidis-backup-${toLocalISODate(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function handleImport(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // Merge imported data with existing (imported wins on conflicts)
+      appointments = { ...appointments, ...parsed };
+      await saveToDB();
+      renderCalendar();
+      renderSlots(selectedDateISO);
+      alert("✅ Import successful!");
+    } catch {
+      alert(
+        "❌ Invalid backup file. Please use a previously exported JSON file.",
+      );
+    }
+  };
+  reader.readAsText(file);
+  // Reset input so the same file can be re-imported if needed
+  importFileInput.value = "";
+}
+
+/* ─────────────────────────────────────────
+   EXPORT / IMPORT LISTENERS
+   ───────────────────────────────────────── */
+/* ─────────────────────────────────────────
+   DRAWER OPEN / CLOSE
+   ───────────────────────────────────────── */
+function openDrawer() {
+  drawer.classList.add("open");
+  drawerOverlay.classList.add("open");
+}
+function closeDrawer() {
+  drawer.classList.remove("open");
+  drawerOverlay.classList.remove("open");
+}
+menuBtn.addEventListener("click", openDrawer);
+drawerCloseBtn.addEventListener("click", closeDrawer);
+drawerOverlay.addEventListener("click", closeDrawer);
+
+exportBtn.addEventListener("click", () => {
+  closeDrawer();
+  triggerExport();
+});
+importBtn.addEventListener("click", () => importFileInput.click());
+importFileInput.addEventListener("change", (e) => {
+  closeDrawer();
+  handleImport(e.target.files[0]);
+});
+
+/* ═════════════════════════════════════════
+   UTILITIES
+   ═════════════════════════════════════════ */
+
 function toLocalISODate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -96,13 +262,29 @@ function toLocalISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
-/* Safe ISO → local Date (avoids UTC midnight timezone shift) */
-function isoToLocalDate(dateISO) {
-  const [y, mo, da] = dateISO.split("-").map(Number);
-  return new Date(y, mo - 1, da);
+function escapeHtml(s) {
+  if (!s) return "";
+  return String(s).replace(
+    /[&<>"']/g,
+    (m) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        m
+      ],
+  );
 }
 
-/* VIEW SWITCHING LOGIC */
+function formatTimeForLocale(hm) {
+  const [hh, mm] = hm.split(":").map(Number);
+  return new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
+    lang === "el" ? "el-GR" : "en-US",
+    { hour: "numeric", minute: "2-digit" },
+  );
+}
+
+/* ═════════════════════════════════════════
+   VIEW SWITCHING  (slide animations)
+   ═════════════════════════════════════════ */
+
 function showSlotsView() {
   calendarSection.classList.add("anim-exit-left");
   setTimeout(() => {
@@ -127,13 +309,53 @@ function showCalendarView() {
   }, 280);
 }
 
-/* Calendar helpers */
+/* ═════════════════════════════════════════
+   STATS BAR
+   ═════════════════════════════════════════ */
+
+function renderStats() {
+  const now = new Date();
+  const todayISO = toLocalISODate(now);
+
+  // Week boundaries (Mon–Sun)
+  const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // Mon=1..Sun=7
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - (dayOfWeek - 1));
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  // Month boundaries
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+  let weeklyCount = 0;
+  let monthlyCount = 0;
+
+  Object.entries(appointments).forEach(([dateISO, slots]) => {
+    const parts = dateISO.split("-").map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const bookedCount = Object.keys(slots).length;
+
+    if (d >= weekStart && d <= weekEnd) weeklyCount += bookedCount;
+    if (d >= monthStart && d <= monthEnd) monthlyCount += bookedCount;
+  });
+
+  document.getElementById("weeklyCount").textContent = weeklyCount;
+  document.getElementById("monthlyCount").textContent = monthlyCount;
+}
+
+/* ═════════════════════════════════════════
+   CALENDAR
+   ═════════════════════════════════════════ */
+
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 function endOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
+
 function formatMonthLabel(d) {
   return d.toLocaleString(lang === "el" ? "el-GR" : "en-US", {
     month: "long",
@@ -141,43 +363,38 @@ function formatMonthLabel(d) {
   });
 }
 
-/* Render Weekday Header */
 function renderWeekdays() {
   weekdayRow.innerHTML = "";
-  const days = STRINGS[lang].weekdays;
-  days.forEach((dayName) => {
+  STRINGS[lang].weekdays.forEach((dayName) => {
     const div = document.createElement("div");
     div.innerText = dayName;
     weekdayRow.appendChild(div);
   });
 }
 
-/* Render calendar */
 function renderCalendar() {
+  renderStats();
   calendarGrid.innerHTML = "";
   monthLabel.textContent = formatMonthLabel(currentMonth);
 
   const start = startOfMonth(currentMonth);
   const end = endOfMonth(currentMonth);
-
   let startDow = start.getDay();
   if (startDow === 0) startDow = 7;
   const prevFill = startDow - 1;
-
   const totalDays = prevFill + end.getDate();
   const slots = Math.ceil(totalDays / 7) * 7;
-
   const firstShown = new Date(start);
   firstShown.setDate(start.getDate() - prevFill);
+  const todayISO = toLocalISODate(new Date());
 
   for (let i = 0; i < slots; i++) {
     const d = new Date(firstShown);
     d.setDate(firstShown.getDate() + i);
     const iso = toLocalISODate(d);
+
     const dayEl = document.createElement("button");
     dayEl.className = "day";
-    const now = new Date();
-    const todayISO = toLocalISODate(now);
     if (iso === todayISO) dayEl.classList.add("today");
     if (d.getMonth() !== currentMonth.getMonth())
       dayEl.classList.add("inactive");
@@ -187,25 +404,25 @@ function renderCalendar() {
     dayEl.innerText = d.getDate();
 
     dayEl.addEventListener("click", (e) => {
-      const clickedISO = e.currentTarget.getAttribute("data-date");
-      selectedDateISO = clickedISO;
+      selectedDateISO = e.currentTarget.getAttribute("data-date");
       renderCalendar();
-      renderSlots(clickedISO);
+      renderSlots(selectedDateISO);
       showSlotsView();
     });
     calendarGrid.appendChild(dayEl);
   }
 }
 
-/* Time slot generation */
+/* ═════════════════════════════════════════
+   TIME SLOTS
+   ═════════════════════════════════════════ */
+
 function generateTimes() {
   const slots = [];
   let h = 7,
     m = 0;
   while (true) {
-    const hh = String(h).padStart(2, "0");
-    const mm = String(m).padStart(2, "0");
-    slots.push(`${hh}:${mm}`);
+    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     if (h === 24 && m === 0) break;
     m += 20;
     if (m >= 60) {
@@ -218,11 +435,10 @@ function generateTimes() {
 }
 const TIMES = generateTimes();
 
-/* Display selected date & slots */
 function renderSlots(dateISO) {
   if (!dateISO) return;
-
-  const d = isoToLocalDate(dateISO);
+  const parts = dateISO.split("-").map((p) => parseInt(p, 10));
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
   selectedLabel.textContent = d.toLocaleDateString(
     lang === "el" ? "el-GR" : "en-US",
     { weekday: "short", month: "short", day: "numeric", year: "numeric" },
@@ -243,11 +459,8 @@ function renderSlots(dateISO) {
     );
 
     if (dayAppts[time]) {
-      btn.classList.add("booked");
-      btn.classList.add("slot-booked-highlight");
-      btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(
-        dayAppts[time].name,
-      )}</div>`;
+      btn.classList.add("booked", "slot-booked-highlight");
+      btn.innerHTML = `<div class="time">${tDisplay}</div><div class="client">${escapeHtml(dayAppts[time].name)}</div>`;
       btn.disabled = false;
     } else {
       btn.classList.add("free");
@@ -258,7 +471,10 @@ function renderSlots(dateISO) {
   });
 }
 
-/* Modal handling */
+/* ═════════════════════════════════════════
+   MODAL
+   ═════════════════════════════════════════ */
+
 function openModalForSlot(date, time) {
   activeSlot = { date, time };
   const booking = (appointments[date] || {})[time] || null;
@@ -284,31 +500,11 @@ function closeModal() {
   activeSlot = null;
 }
 
-/* helpers */
-function formatTimeForLocale(hm) {
-  const [hh, mm] = hm.split(":").map(Number);
-  return new Date(1970, 0, 1, hh % 24, mm).toLocaleTimeString(
-    lang === "el" ? "el-GR" : "en-US",
-    { hour: "numeric", minute: "2-digit" },
-  );
-}
-function escapeHtml(s) {
-  if (!s) return "";
-  return String(s).replace(
-    /[&<>"']/g,
-    (m) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        m
-      ],
-  );
-}
-
-/* Save booking */
-saveBtn.addEventListener("click", () => {
+/* ─── Save ─── */
+saveBtn.addEventListener("click", async () => {
   if (!activeSlot) return;
   const name = inputName.value.trim();
   const phone = inputPhone.value.trim();
-
   if (!name) {
     alert(STRINGS[lang].clientName + " is required");
     inputName.focus();
@@ -318,42 +514,35 @@ saveBtn.addEventListener("click", () => {
   if (!appointments[activeSlot.date]) appointments[activeSlot.date] = {};
   appointments[activeSlot.date][activeSlot.time] = { name, phone };
 
-  saveToStorage();
+  await saveToDB();
   renderSlots(activeSlot.date);
   renderCalendar();
-  updateStats(); /* ← FIXED: update stats after every save */
 
   const timeToFlash = activeSlot.time;
   closeModal();
 
   setTimeout(() => {
-    const selector = `.slot.booked[data-time="${timeToFlash}"]`;
-    const bookedSlot = slotsContainer.querySelector(selector);
+    const bookedSlot = slotsContainer.querySelector(
+      `.slot.booked[data-time="${timeToFlash}"]`,
+    );
     if (bookedSlot) {
-      bookedSlot.classList.add("flash-booked");
-      bookedSlot.classList.add("slot-booked-highlight");
-      setTimeout(() => {
-        bookedSlot.classList.remove("flash-booked");
-      }, 700);
+      bookedSlot.classList.add("flash-booked", "slot-booked-highlight");
+      setTimeout(() => bookedSlot.classList.remove("flash-booked"), 700);
     }
   }, 50);
 });
 
-/* Delete booking */
-deleteBtn.addEventListener("click", () => {
+/* ─── Delete ─── */
+deleteBtn.addEventListener("click", async () => {
   if (!activeSlot) return;
   if (confirm(STRINGS[lang].delete + "?")) {
-    if (
-      appointments[activeSlot.date] &&
-      appointments[activeSlot.date][activeSlot.time]
-    ) {
+    if (appointments[activeSlot.date]?.[activeSlot.time]) {
       delete appointments[activeSlot.date][activeSlot.time];
       if (Object.keys(appointments[activeSlot.date]).length === 0)
         delete appointments[activeSlot.date];
-      saveToStorage();
+      await saveToDB();
       renderSlots(activeSlot.date);
       renderCalendar();
-      updateStats(); /* ← FIXED: update stats after every delete */
       closeModal();
     }
   }
@@ -364,7 +553,10 @@ modal.addEventListener("click", (e) => {
   if (e.target === modal) closeModal();
 });
 
-/* Navigation Listeners */
+/* ═════════════════════════════════════════
+   NAVIGATION LISTENERS
+   ═════════════════════════════════════════ */
+
 prevMonthBtn.addEventListener("click", () => {
   currentMonth = new Date(
     currentMonth.getFullYear(),
@@ -381,20 +573,22 @@ nextMonthBtn.addEventListener("click", () => {
   );
   renderCalendar();
 });
-backToCalendarBtn.addEventListener("click", () => {
-  showCalendarView();
-});
+backToCalendarBtn.addEventListener("click", () => showCalendarView());
 
-/* Clear/Language Listeners */
-clearBtn.addEventListener("click", () => {
+/* ═════════════════════════════════════════
+   CLEAR / LANGUAGE
+   ═════════════════════════════════════════ */
+
+clearBtn.addEventListener("click", async () => {
+  closeDrawer();
   if (confirm(STRINGS[lang].clearConfirm)) {
     appointments = {};
-    saveToStorage();
+    await saveToDB();
     renderSlots(selectedDateISO);
     renderCalendar();
-    updateStats(); /* ← FIXED: update stats after manual clear */
   }
 });
+
 langToggle.addEventListener("click", () => {
   lang = lang === "en" ? "el" : "en";
   localStorage.setItem(LANG_KEY, lang);
@@ -408,117 +602,34 @@ function applyLanguage() {
   subtitleEl.innerText = STRINGS[lang].subtitle;
   langToggle.innerText = lang === "en" ? "Ελληνικά" : "English";
   backToCalendarBtn.innerHTML = `‹ <span>${STRINGS[lang].back}</span>`;
-
-  /* Update stats labels when language changes */
-  const labelWeeklyEl = document.getElementById("labelWeekly");
-  const labelMonthlyEl = document.getElementById("labelMonthly");
-  if (labelWeeklyEl) labelWeeklyEl.innerText = STRINGS[lang].labelWeekly;
-  if (labelMonthlyEl) labelMonthlyEl.innerText = STRINGS[lang].labelMonthly;
-
   renderWeekdays();
 }
 
-/* ─────────────────────────────────────────────
-   STATS  — counts only current week & current month
-   Uses isoToLocalDate() to avoid UTC timezone shift
-   ───────────────────────────────────────────── */
-function getStartOfWeek(now) {
-  const d = new Date(now);
-  const day = d.getDay(); // 0 = Sunday
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday-based
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+/* ═════════════════════════════════════════
+   INIT
+   ═════════════════════════════════════════ */
 
-function updateStats() {
-  let weeklyTotal = 0;
-  let monthlyTotal = 0;
-
-  const now = new Date();
-  const curMonth = now.getMonth();
-  const curYear = now.getFullYear();
-
-  const weekStart = getStartOfWeek(now);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  for (const dateISO in appointments) {
-    const apptDate = isoToLocalDate(dateISO); /* ← FIXED: no UTC shift */
-    const dailyCount = Object.keys(appointments[dateISO]).length;
-
-    if (
-      apptDate.getMonth() === curMonth &&
-      apptDate.getFullYear() === curYear
-    ) {
-      monthlyTotal += dailyCount;
-    }
-
-    if (apptDate >= weekStart && apptDate <= weekEnd) {
-      weeklyTotal += dailyCount;
-    }
+async function init() {
+  // 1. Open IndexedDB
+  try {
+    db = await openDB();
+  } catch (e) {
+    console.error("Could not open IndexedDB:", e);
   }
 
-  document.getElementById("weeklyCount").innerText = weeklyTotal;
-  document.getElementById("monthlyCount").innerText = monthlyTotal;
-}
+  // 2. Load appointments (with localStorage migration fallback inside)
+  await loadFromDB();
 
-/* ─────────────────────────────────────────────
-   PERIODIC RESET
-   • Monthly: clears ALL appointments on the 1st of each new month
-   • Weekly:  clears appointments older than current Mon on each new week
-   Both checks run silently at app start — data is only removed when
-   the period has genuinely changed (key mismatch).
-   ───────────────────────────────────────────── */
-function checkPeriodicReset() {
-  const now = new Date();
-
-  /* ── Monthly reset ── */
-  const currentMonthKey = `${now.getFullYear()}-${now.getMonth()}`;
-  const lastMonthReset = localStorage.getItem("papounidis_last_reset");
-
-  if (lastMonthReset && lastMonthReset !== currentMonthKey) {
-    appointments = {};
-    saveToStorage();
-    console.log("New month: all appointments cleared.");
-  }
-  localStorage.setItem("papounidis_last_reset", currentMonthKey);
-
-  /* ── Weekly reset ── */
-  const weekStart = getStartOfWeek(now);
-  const currentWeekKey = toLocalISODate(weekStart); // e.g. "2025-05-12"
-  const lastWeekKey = localStorage.getItem("papounidis_last_week");
-
-  if (lastWeekKey && lastWeekKey !== currentWeekKey) {
-    // Remove any appointments that belong to a previous week
-    // (within the same month — cross-month ones are already gone)
-    for (const dateISO in appointments) {
-      const apptDate = isoToLocalDate(dateISO);
-      if (apptDate < weekStart) {
-        delete appointments[dateISO];
-      }
-    }
-    saveToStorage();
-    console.log("New week: previous week appointments cleared.");
-  }
-  localStorage.setItem("papounidis_last_week", currentWeekKey);
-}
-
-function init() {
-  loadFromStorage();
-  checkPeriodicReset(); /* replaces old checkMonthlyReset */
+  // 3. UI setup
   applyLanguage();
-
   const today = new Date();
   currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   selectedDateISO = toLocalISODate(today);
-
   renderCalendar();
   renderSlots(selectedDateISO);
   showCalendarView();
-  updateStats(); /* draw correct counts on load */
 
+  // 4. Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker
